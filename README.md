@@ -1,5 +1,10 @@
 # BruneiWeatherHomeAssistant
 scrape official Brunei Darussalam Meteorological Department website for latest weather information (Home Assistant)
+<img width="1271" height="879" alt="Screenshot_20250712_170345" src="https://github.com/user-attachments/assets/344f43e3-9f9e-4ec7-b82e-f8488c758fb9" />
+
+## Background
+
+I was looking into BDMD website and reverse engineered way to pull the information directly into home assistant using restful sensors. I only scraped data for Kuala Belait and BSB (Airport) but there is potential to modify the code to include data for Tutong and Temburong.
 
 ## Configuration.yaml
 
@@ -905,3 +910,136 @@ sensor:
     unit_of_measurement: "°C"
     scan_interval: 1800
  ```
+## Automations
+
+Example automation to announce of weather warning and advisories through google nest speakers using google assistant sdk.
+
+``` yaml
+alias: "[weather] new advisory/warning > announce"
+description: ""
+triggers:
+  - entity_id: sensor.advisory_short_onshore
+    from:
+      - Unknown
+      - unknown
+      - none
+      - None
+      - ""
+      - Unavailable
+      - unavailable
+    trigger: state
+  - entity_id: sensor.warning_short_onshore
+    from:
+      - Unknown
+      - unknown
+      - none
+      - None
+      - ""
+      - Unavailable
+      - unavailable
+    trigger: state
+actions:
+  - choose:
+      - conditions:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: sensor.advisory_short_onshore
+                state: unknown
+              - condition: state
+                entity_id: sensor.advisory_short_onshore
+                state: none
+              - condition: state
+                entity_id: sensor.advisory_short_onshore
+                state: "\"\""
+        sequence:
+          - data:
+              message: >-
+                New national weather advisory just released...  {{
+                states('sensor.advisory_short_onshore') }}...
+
+                {% set start =
+                as_timestamp(states('sensor.advisory_start_onshore')) |
+                as_datetime %} {% set end =
+                as_timestamp(states('sensor.advisory_end_onshore')) |
+                as_datetime %}
+
+                {% if start <= now() %}
+                  now
+                {% else %}
+                  starting {% if start.date() == now().date() %}
+                    {% if start <= now() %}
+                      now
+                    {% else %}
+                      later today
+                    {% endif %}
+                  {% elif start.date() == (now() + timedelta(days=1)).date() %}
+                    tomorrow
+                  {% else %}
+                    in {{ (start.date() - now().date()).days }} days
+                  {% endif %}
+                {% endif %}
+
+                ...and {% if end <= now() %}
+                  already ended
+                {% else %}
+                  {% if end.date() == now().date() %}
+                    {% if end <= now() %}
+                      ending now
+                    {% else %}
+                      ending later today
+                    {% endif %}
+                  {% elif end.date() == (now() + timedelta(days=1)).date() %}
+                    ending tomorrow
+                  {% else %}
+                    lasting for {{ (end.date() - now().date()).days }} days
+                  {% endif %}
+                {% endif %}
+            action: notify.google_assistant_sdk
+        alias: advisory
+      - conditions:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: sensor.warning_short_onshore
+                state: unknown
+              - condition: state
+                entity_id: sensor.warning_short_onshore
+                state: none
+              - condition: state
+                entity_id: sensor.warning_short_onshore
+                state: "\"\""
+        sequence:
+          - data:
+              message: >-
+                New national weather advisory just released... {{
+                states('sensor.warning_short_onshore') }}... starting {% set
+                start = as_timestamp(states('sensor.warning_start_onshore')) |
+                as_datetime %} {% if start.date() == now().date() %}
+                  {% if start <= now() %}
+                    now
+                  {% else %}
+                    later today
+                  {% endif %}
+                {% elif start.date() == (now() + timedelta(days=1)).date() %}
+                  tomorrow
+                {% else %}
+                  in {{ (start.date() - now().date()).days }} days
+                {% endif %} ...and {% set end =
+                as_timestamp(states('sensor.warning_end_onshore')) | as_datetime
+                %} {% if end.date() == now().date() %}
+                  {% if end <= now() %}
+                    ending now
+                  {% else %}
+                    ending later today
+                  {% endif %}
+                {% elif end.date() == (now() + timedelta(days=1)).date() %}
+                  ending tomorrow
+                {% else %}
+                  lasting for {{ (end.date() - now().date()).days }} days
+                {% endif %}
+            action: notify.google_assistant_sdk
+        alias: warning
+mode: single
+
+```
